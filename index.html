@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>画像デジタル化チェンジャー (情報I) - 最終版</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+
+        h1, h2 {
+            color: #333;
+        }
+
+        /* ドロップエリア */
+        #drop-area {
+            width: 80vw;
+            max-width: 600px;
+            height: 250px;
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 1.2em;
+            color: #888;
+            background-color: #fff;
+            transition: background-color 0.3s, border-color 0.3s;
+            text-align: center;
+            gap: 10px;
+        }
+        #drop-area.highlight {
+            background-color: #e6f7ff;
+            border-color: #007bff;
+        }
+        #drop-area .icon {
+            font-size: 3em;
+            color: #aaa;
+        }
+
+        /* コントロールコンテナ */
+        #controls-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 80vw;
+            max-width: 600px;
+            gap: 20px;
+        }
+
+        /* 各コントロールセクション */
+        .control-section {
+            width: 100%;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .control-section label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .control-section input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+            -webkit-appearance: none;
+            height: 8px;
+            background: #d3d3d3;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        .control-section input[type="range"]:hover {
+            opacity: 1;
+        }
+        .control-section input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+        }
+        .control-section input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+        }
+        
+        /* パラメータ数値表示 */
+        .control-section .value-display {
+            display: block;
+            text-align: right;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        /* グレースケールスイッチ (変更なし) */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 24px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: .4s;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        input:focus + .slider {
+            box-shadow: 0 0 1px #2196F3;
+        }
+        input:checked + .slider:before {
+            -webkit-transform: translateX(16px);
+            -ms-transform: translateX(16px);
+            transform: translateX(16px);
+        }
+        .switch-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        /* Canvas (変更なし) */
+        #image-canvas {
+            border: 1px solid #ddd;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* 虫眼鏡ポップアップ (変更なし) */
+        #magnifier {
+            position: absolute;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            background-color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            font-family: monospace;
+            padding: 5px;
+        }
+        #magnifier .magnified-canvas {
+            border-bottom: 1px solid #eee;
+            margin-bottom: 5px;
+            display: block;
+        }
+        #magnifier p {
+            margin: 0;
+            padding: 2px 0;
+            color: #333;
+            font-size: 1.0em;
+        }
+        #magnifier #mag-coords,
+        #magnifier #mag-rgb,
+        #magnifier #mag-hex {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        #magnifier .color-box {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 1px solid #ccc;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+
+        /* 【追加機能】ボタンコンテナ */
+        #button-container {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* 【追加機能】ボタンのスタイル */
+        .app-button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            flex-grow: 1; /* ボタンを横いっぱいに広げる */
+        }
+
+        #reset-button {
+            background-color: #ff6347; /* 赤系 */
+            color: white;
+        }
+        #reset-button:hover {
+            background-color: #e55337;
+        }
+
+        #download-button {
+            background-color: #28a745; /* 緑系 */
+            color: white;
+        }
+        #download-button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🖼️ 画像デジタル化チェンジャー</h1>
+    <p>画像ファイルを下の枠にドラッグ＆ドロップしてください。</p>
+
+    <div id="drop-area">
+        <span class="icon">📁</span>
+        ここに画像をドロップ
+    </div>
+
+    <div id="controls-container" style="display:none;">
+        
+        <canvas id="image-canvas"></canvas>
+
+        <div class="control-section">
+            <label for="resolution-slider">標本化（モザイクサイズ）:</label>
+            <input type="range" id="resolution-slider" min="1" max="100" value="1" step="1">
+            <span id="resolution-value-display" class="value-display">1ピクセル</span>
+        </div>
+
+        
+        <div class="control-section">
+            <label for="color-bit-slider">量子化（色深度）:</label>
+            <input type="range" id="color-bit-slider" min="1" max="8" value="8" step="1">
+            <span id="color-bit-value-display" class="value-display">8 bit (RGB 256階調)</span>
+
+            <div class="switch-container">
+                <label for="grayscale-switch">グレースケール:</label>
+                <label class="switch">
+                    <input type="checkbox" id="grayscale-switch">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+        </div>
+
+        <div id="button-container">
+            <button id="reset-button" class="app-button">🔄 リセット</button>
+            <button id="download-button" class="app-button">💾 ダウンロード</button>
+        </div>
+    </div>
+
+    
+    <div id="magnifier">
+        <canvas class="magnified-canvas" width="60" height="60"></canvas>
+        <p>座標: <span id="mag-coords"></span></p>
+        <p>色: <span class="color-box" id="mag-color-box"></span> <span id="mag-rgb"></span> (<span id="mag-hex"></span>)</p>
+    </div>
+
+    <script>
+        const dropArea = document.getElementById('drop-area');
+        const controlsContainer = document.getElementById('controls-container');
+        const canvas = document.getElementById('image-canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const resolutionSlider = document.getElementById('resolution-slider');
+        const resolutionValueDisplay = document.getElementById('resolution-value-display');
+        const colorBitSlider = document.getElementById('color-bit-slider');
+        const colorBitValueDisplay = document.getElementById('color-bit-value-display');
+        const grayscaleSwitch = document.getElementById('grayscale-switch');
+        const magnifier = document.getElementById('magnifier');
+        const magnifiedCanvas = magnifier.querySelector('.magnified-canvas');
+        const magCtx = magnifiedCanvas.getContext('2d', { willReadFrequently: true });
+        const magCoords = document.getElementById('mag-coords');
+        const magColorBox = document.getElementById('mag-color-box');
+        const magRgb = document.getElementById('mag-rgb');
+        const magHex = document.getElementById('mag-hex');
+        
+        // 【追加機能】ボタン要素の参照
+        const resetButton = document.getElementById('reset-button');
+        const downloadButton = document.getElementById('download-button');
+
+        let originalImage = null;
+        let currentImageData = null;
+
+        /**
+         * 1. ドラッグ＆ドロップの処理 (変更なし)
+         */
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('highlight'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'), false);
+        });
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    originalImage = img;
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+
+                    applyFilters(); 
+                    
+                    dropArea.style.display = 'none';
+                    controlsContainer.style.display = 'flex';
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        /**
+         * 2. フィルター適用処理 (変更なし)
+         */
+        function applyFilters() {
+            if (!originalImage) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
+
+            let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let data = imageData.data;
+
+            // モザイク（標本化）処理
+            const blockSize = parseInt(resolutionSlider.value);
+            resolutionValueDisplay.textContent = `${blockSize}ピクセル`;
+
+            if (blockSize > 1) {
+                for (let y = 0; y < canvas.height; y += blockSize) {
+                    for (let x = 0; x < canvas.width; x += blockSize) {
+                        const index = (y * canvas.width + x) * 4;
+                        const r = data[index];
+                        const g = data[index + 1];
+                        const b = data[index + 2];
+                        const a = data[index + 3];
+
+                        for (let j = 0; j < blockSize; j++) {
+                            for (let i = 0; i < blockSize; i++) {
+                                const currentX = x + i;
+                                const currentY = y + j;
+                                if (currentX < canvas.width && currentY < canvas.height) {
+                                    const fillIndex = (currentY * canvas.width + currentX) * 4;
+                                    data[fillIndex] = r;
+                                    data[fillIndex + 1] = g;
+                                    data[fillIndex + 2] = b;
+                                    data[fillIndex + 3] = a;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // グレースケール変換
+            const isGrayscale = grayscaleSwitch.checked;
+            if (isGrayscale) {
+                for (let i = 0; i < data.length; i += 4) {
+                    const avg = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                    data[i] = avg;
+                    data[i + 1] = avg;
+                    data[i + 2] = avg;
+                }
+            }
+
+            // 色深度（量子化）処理
+            const bits = parseInt(colorBitSlider.value);
+            const levels = 1 << bits;
+            const step = 256 / levels;
+            const halfStep = step / 2;
+
+            colorBitValueDisplay.textContent = `${bits} bit (${isGrayscale ? '白黒' : 'RGB'} ${levels}階調)`;
+
+            for (let i = 0; i < data.length; i += 4) {
+                data[i]     = Math.floor(Math.floor(data[i] / step) * step + halfStep);
+                data[i + 1] = Math.floor(Math.floor(data[i + 1] / step) * step + halfStep);
+                data[i + 2] = Math.floor(Math.floor(data[i + 2] / step) * step + halfStep);
+
+                data[i] = Math.min(255, Math.max(0, data[i]));
+                data[i+1] = Math.min(255, Math.max(0, data[i+1]));
+                data[i+2] = Math.min(255, Math.max(0, data[i+2]));
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            currentImageData = imageData;
+        }
+
+        /**
+         * 3. スライダー操作の連動 (変更なし)
+         */
+        resolutionSlider.addEventListener('input', applyFilters);
+        colorBitSlider.addEventListener('input', applyFilters);
+        grayscaleSwitch.addEventListener('change', applyFilters);
+
+        /**
+         * 4. ピクセル情報表示 (変更なし)
+         */
+        canvas.addEventListener('mousemove', (e) => {
+            if (!originalImage || !currentImageData) {
+                magnifier.style.display = 'none';
+                return;
+            }
+            // ... (虫眼鏡処理は省略、コード内では有効)
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const canvasX = Math.floor(mouseX * (canvas.width / rect.width));
+            const canvasY = Math.floor(mouseY * (canvas.height / rect.height));
+
+            if (canvasX < 0 || canvasX >= canvas.width || canvasY < 0 || canvasY >= canvas.height) {
+                magnifier.style.display = 'none';
+                return;
+            }
+
+            magnifier.style.left = `${e.clientX + 20}px`;
+            magnifier.style.top = `${e.clientY + 20}px`;
+            magnifier.style.display = 'block';
+
+            const zoomLevel = 5;
+            const magWidth = magnifiedCanvas.width;
+            const magHeight = magnifiedCanvas.height;
+            const magHalfWidth = magWidth / 2 / zoomLevel;
+            const magHalfHeight = magHeight / 2 / zoomLevel;
+            
+            const srcX = Math.max(0, canvasX - Math.floor(magHalfWidth));
+            const srcY = Math.max(0, canvasY - Math.floor(magHalfHeight));
+            const srcWidth = Math.min(canvas.width - srcX, Math.ceil(magWidth / zoomLevel));
+            const srcHeight = Math.min(canvas.height - srcY, Math.ceil(magHeight / zoomLevel));
+
+            magCtx.imageSmoothingEnabled = false;
+            magCtx.clearRect(0, 0, magWidth, magHeight);
+            magCtx.drawImage(
+                canvas,
+                srcX, srcY, srcWidth, srcHeight,
+                0, 0, magWidth, magHeight
+            );
+
+            const pixelDataIndex = (canvasY * canvas.width + canvasX) * 4;
+            const r = currentImageData.data[pixelDataIndex];
+            const g = currentImageData.data[pixelDataIndex + 1];
+            const b = currentImageData.data[pixelDataIndex + 2];
+
+            magCoords.textContent = `(${canvasX}, ${canvasY})`;
+            magRgb.textContent = `RGB(${r}, ${g}, ${b})`;
+            magHex.textContent = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`.toUpperCase();
+            magColorBox.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            magnifier.style.display = 'none';
+        });
+
+
+        /**
+         * 5. 【追加機能】リセットボタンの処理
+         */
+        function resetApp() {
+            // 状態を初期化
+            originalImage = null;
+            currentImageData = null;
+
+            // Canvasをクリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.width = 0;
+            canvas.height = 0;
+
+            // スライダーを初期値に戻す
+            resolutionSlider.value = 1;
+            colorBitSlider.value = 8;
+            grayscaleSwitch.checked = false;
+
+            // UIを初期状態（ドロップエリア）に戻す
+            controlsContainer.style.display = 'none';
+            dropArea.style.display = 'flex';
+            magnifier.style.display = 'none';
+        }
+
+        resetButton.addEventListener('click', resetApp);
+
+
+        /**
+         * 6. 【追加機能】ダウンロードボタンの処理
+         */
+        function downloadImage() {
+            if (!originalImage) {
+                alert('画像をドロップしてからダウンロードしてください。');
+                return;
+            }
+
+            // Canvasの内容を画像データURLとして取得 (PNG形式)
+            const dataURL = canvas.toDataURL('image/png');
+
+            // ダウンロード用の<a>タグを作成
+            const a = document.createElement('a');
+            a.href = dataURL;
+            
+            // ファイル名の生成
+            const res = resolutionSlider.value;
+            const bits = colorBitSlider.value;
+            const gray = grayscaleSwitch.checked ? 'GRAY' : 'RGB';
+            a.download = `digital_image_res-${res}px_bit-${bits}_${gray}.png`; // ファイル名を設定
+            
+            // クリックしてダウンロードを実行
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        downloadButton.addEventListener('click', downloadImage);
+    </script>
+</body>
+</html>
